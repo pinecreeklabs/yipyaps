@@ -82,3 +82,38 @@ export const getCityContext = createServerFn({ method: 'GET' })
       locationData: context.locationData,
     }
   })
+
+export interface ReverseGeocodeResult {
+  city: string | null
+  citySlug: string | null
+}
+
+interface NominatimResponse {
+  address?: {
+    city?: string
+    town?: string
+    village?: string
+  }
+}
+
+export const reverseGeocode = createServerFn({ method: 'GET' })
+  .inputValidator((data: { lat: number; lng: number }) => data)
+  .handler(async ({ data }): Promise<ReverseGeocodeResult> => {
+    console.log('[reverseGeocode] Request:', { lat: data.lat, lng: data.lng })
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${data.lat}&lon=${data.lng}&format=json`,
+        { headers: { 'User-Agent': 'Yipyaps/1.0' } }
+      )
+      const result: NominatimResponse = await response.json()
+      const city = result.address?.city || result.address?.town || result.address?.village || null
+      console.log('[reverseGeocode] Result:', { city, address: result.address })
+      return {
+        city,
+        citySlug: normalizeCitySlug(city),
+      }
+    } catch (err) {
+      console.error('[reverseGeocode] Error:', err)
+      return { city: null, citySlug: null }
+    }
+  })
