@@ -13,6 +13,14 @@ const cityMiddleware = createMiddleware().server(async ({ next, request }) => {
   const userCitySlug = normalizeCitySlug(cf?.city || null)
   const canPost = isLocalDev || (!!subdomain && userCitySlug === subdomain)
 
+  console.log('[Posts Middleware]', {
+    hostname,
+    subdomain,
+    userCitySlug,
+    canPost,
+    isLocalDev,
+  })
+
   return next({
     context: { subdomain, userCitySlug, canPost, isLocalDev },
   })
@@ -24,17 +32,28 @@ export const getPosts = createServerFn({ method: 'GET' })
     const { env } = await import(/* @vite-ignore */ 'cloudflare:workers')
     const db = getDb(env.DB)
 
-    // Filter by city if on subdomain, otherwise return all (dev mode)
-    if (context.subdomain) {
-      return await db
-        .select()
-        .from(posts)
-        .where(eq(posts.city, context.subdomain))
-        .orderBy(desc(posts.createdAt))
-        .all()
-    }
+    try {
+      // Filter by city if on subdomain, otherwise return all (dev mode)
+      let result
+      if (context.subdomain) {
+        console.log('[getPosts] Fetching posts for city:', context.subdomain)
+        result = await db
+          .select()
+          .from(posts)
+          .where(eq(posts.city, context.subdomain))
+          .orderBy(desc(posts.createdAt))
+          .all()
+      } else {
+        console.log('[getPosts] Fetching all posts (dev mode)')
+        result = await db.select().from(posts).orderBy(desc(posts.createdAt)).all()
+      }
 
-    return await db.select().from(posts).orderBy(desc(posts.createdAt)).all()
+      console.log('[getPosts] Found', result.length, 'posts')
+      return result
+    } catch (error) {
+      console.error('[getPosts] Error:', error)
+      throw error
+    }
   })
 
 export const createPost = createServerFn({ method: 'POST' })
@@ -47,7 +66,15 @@ export const createPost = createServerFn({ method: 'POST' })
     const { content } = data
     const { subdomain, canPost, isLocalDev } = context
 
+    console.log('[createPost] Attempting to create post', {
+      subdomain,
+      canPost,
+      isLocalDev,
+      contentLength: content?.length,
+    })
+
     if (!content?.trim()) {
+      console.error('[createPost] Validation failed: content is required')
       throw new Error('Post content is required')
     }
 
@@ -55,17 +82,30 @@ export const createPost = createServerFn({ method: 'POST' })
     const city = isLocalDev ? (data.city || 'dev') : subdomain
 
     if (!city) {
+      console.error('[createPost] Validation failed: no city')
       throw new Error('Posts can only be created on city subdomains')
     }
 
     if (!isLocalDev && !canPost) {
+      console.error('[createPost] Permission denied:', { subdomain, userCitySlug: context.userCitySlug })
       throw new Error(`You must be in ${subdomain} to post here`)
     }
 
-    const result = await db
-      .insert(posts)
-      .values({ content: content.trim(), city })
-      .returning()
+    try {
+      const result = await db
+        .insert(posts)
+        .values({ content: content.trim(), city })
+        .returning()
 
-    return result
+      console.log('[createPost] Successfully created post:', {
+        id: result[0]?.id,
+        city,
+        contentLength: content.trim().length,
+      })
+
+      return result
+    } catch (error) {
+      console.error('[createPost] Database error:', error)
+      throw error
+    }
   })
