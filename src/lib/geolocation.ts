@@ -51,15 +51,6 @@ const geolocationMiddleware = createMiddleware().server(async ({ next, request }
   const userCitySlug = normalizeCitySlug(locationData.city)
   const canPost = isLocalDev || (!!subdomain && userCitySlug === subdomain)
 
-  console.log('[Geolocation]', {
-    hostname,
-    isLocalDev,
-    city: locationData.city,
-    subdomain,
-    userCitySlug,
-    canPost,
-  })
-
   return next({
     context: { locationData, subdomain, userCitySlug, canPost, isLocalDev },
   })
@@ -67,18 +58,11 @@ const geolocationMiddleware = createMiddleware().server(async ({ next, request }
 
 export const getCityContext = createServerFn({ method: 'GET' })
   .middleware([geolocationMiddleware])
-  .handler(async ({ context }): Promise<CityContext> => {
-    console.log('[getCityContext]', {
-      subdomain: context.subdomain,
-      userCity: context.locationData.city,
-      canPost: context.canPost,
-    })
-    return {
-      subdomain: context.subdomain,
-      userCity: context.locationData.city,
-      userCitySlug: context.userCitySlug,
-      canPost: context.canPost,
-      isLocalDev: context.isLocalDev,
-      locationData: context.locationData,
-    }
-  })
+  .handler(async ({ context }): Promise<CityContext> => ({
+    subdomain: context.subdomain,
+    userCity: context.locationData.city,
+    userCitySlug: context.userCitySlug,
+    canPost: context.canPost,
+    isLocalDev: context.isLocalDev,
+    locationData: context.locationData,
+  }))

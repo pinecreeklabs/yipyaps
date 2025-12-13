@@ -10,12 +10,10 @@ import type { Post } from '../db/schema'
 export const Route = createFileRoute('/')({
   component: Home,
   loader: async (): Promise<{ cityContext: CityContext; posts: Post[] }> => {
-    console.log('[Route Loader] Loading home page')
     const cityContext = await getCityContext()
 
     // Redirect to user's city on main domain (prod only)
     if (!cityContext.isLocalDev && !cityContext.subdomain && cityContext.userCitySlug) {
-      console.log('[Route Loader] Redirecting to city subdomain:', cityContext.userCitySlug)
       throw redirect({
         href: `https://${cityContext.userCitySlug}.yipyaps.com`,
         statusCode: 302,
@@ -23,7 +21,6 @@ export const Route = createFileRoute('/')({
     }
 
     const posts = await getPosts()
-    console.log('[Route Loader] Loaded', posts.length, 'posts for', cityContext.subdomain || 'all cities')
     return { cityContext, posts }
   },
 })
