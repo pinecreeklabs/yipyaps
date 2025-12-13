@@ -9,10 +9,11 @@ export const Route = createRootRoute({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'Yipyaps - Anonymous notes from Your City' },
-      { name: 'description', content: 'Share anonymous notes from Your City' },
+      { title: 'Yipyaps - Notes from Your City' },
+      { name: 'description', content: 'Share notes from Your City' },
     ],
     links: [
+      { rel: 'icon', href: '/favicon.ico' },
       { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
       { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
       {
