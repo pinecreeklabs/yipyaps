@@ -1,4 +1,4 @@
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
+import { HeadContent, Outlet, Scripts, createRootRoute } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 
@@ -7,45 +7,36 @@ import appCss from '../styles.css?url'
 export const Route = createRootRoute({
   head: () => ({
     meta: [
-      {
-        charSet: 'utf-8',
-      },
-      {
-        name: 'viewport',
-        content: 'width=device-width, initial-scale=1',
-      },
-      {
-        title: 'YipYaps',
-      },
+      { charSet: 'utf-8' },
+      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+      { title: 'Yipyaps - Anonymous notes from Your City' },
+      { name: 'description', content: 'Share anonymous notes from Your City' },
     ],
     links: [
+      { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+      { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
       {
         rel: 'stylesheet',
-        href: appCss,
+        href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Quicksand:wght@500;600;700&display=swap',
       },
+      { rel: 'stylesheet', href: appCss },
     ],
   }),
-
-  shellComponent: RootDocument,
+  component: RootComponent,
 })
 
-function RootDocument({ children }: { children: React.ReactNode }) {
+function RootComponent() {
   return (
     <html lang="en">
       <head>
         <HeadContent />
       </head>
-      <body>
-        {children}
+      <body className="font-sans">
+        <Outlet />
         <TanStackDevtools
-          config={{
-            position: 'bottom-right',
-          }}
+          config={{ position: 'bottom-right' }}
           plugins={[
-            {
-              name: 'Tanstack Router',
-              render: <TanStackRouterDevtoolsPanel />,
-            },
+            { name: 'Tanstack Router', render: <TanStackRouterDevtoolsPanel /> },
           ]}
         />
         <Scripts />
