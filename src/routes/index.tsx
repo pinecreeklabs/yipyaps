@@ -102,6 +102,21 @@ function Home() {
     )
   }, [cityContext.isLocalDev, cityContext.userCitySlug, cityContext.subdomain])
 
+  // Poll for new posts every 5 seconds
+  useEffect(() => {
+    const pollPosts = async () => {
+      try {
+        const freshPosts = await getPosts()
+        setPosts(freshPosts)
+      } catch (err) {
+        console.log('[client] Poll error:', err)
+      }
+    }
+
+    const interval = setInterval(pollPosts, 5000)
+    return () => clearInterval(interval)
+  }, [])
+
   const canPost = cityContext.canPost || canPostFromBrowser
   const cityName = cityContext.subdomain ? formatCityName(cityContext.subdomain) : (cityContext.isLocalDev ? 'Dev Mode' : 'Your City')
   const charCount = noteText.trim().length
@@ -110,11 +125,11 @@ function Home() {
     if (!noteText.trim() || isSubmitting || charCount > 140) return
     setIsSubmitting(true)
     try {
-      const result = await createPost({ data: { content: noteText.trim() } })
-      if (result?.[0]) {
-        setPosts([result[0], ...posts])
-      }
+      await createPost({ data: { content: noteText.trim() } })
       setNoteText('')
+      // Fetch fresh posts to show our new post plus any others
+      const freshPosts = await getPosts()
+      setPosts(freshPosts)
     } finally {
       setIsSubmitting(false)
     }
