@@ -8,16 +8,26 @@ import { cloudflare } from '@cloudflare/vite-plugin'
 
 const config = defineConfig({
   plugins: [
-    devtools(),
+    // Cloudflare plugin first (per official Cloudflare docs)
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
-    // this is the plugin that enables path aliases
+    // Then TanStack Start
+    tanstackStart(),
+    devtools(),
     viteTsConfigPaths({
       projects: ['./tsconfig.json'],
     }),
     tailwindcss(),
-    tanstackStart(),
     viteReact(),
   ],
+  optimizeDeps: {
+    exclude: ['cloudflare:workers'],
+  },
+  ssr: {
+    noExternal: ['@tanstack/react-start'],
+    resolve: {
+      conditions: ['worker', 'import'],
+    },
+  },
 })
 
 export default config

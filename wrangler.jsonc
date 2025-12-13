@@ -12,12 +12,35 @@
 	"main": "@tanstack/react-start/server-entry",
 	"observability": {
 		"enabled": true
-	}
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "yipyaps-db",
+			"database_id": "66dde7e9-fd63-44d4-a5bf-7a5044b826d8",
+			"remote": true
+		}
+	],
 	/**
-	 * Smart Placement
-	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
+	 * Environment Variables
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
-	// "placement": { "mode": "smart" }
+	"vars": {
+		"APP_ENV": "development"
+	},
+	"routes": [
+		{
+			"pattern": "yipyaps.com/*",
+			"zone_name": "yipyaps.com"
+		},
+		{
+			"pattern": "*.yipyaps.com/*",
+			"zone_name": "yipyaps.com"
+		}
+	],
+	"workers_dev": true,
+	"preview_urls": true,
+	"placement": { "mode": "smart" }
 	/**
 	 * Bindings
 	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
