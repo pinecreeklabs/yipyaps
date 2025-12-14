@@ -13,14 +13,18 @@
 	"observability": {
 		"logs": {
 			"enabled": true,
-			"destinations": ["signoz-logs"],
+			"destinations": [
+				"signoz-logs"
+			],
 			"head_sampling_rate": 1,
 			"persist": true,
 			"invocation_logs": true
 		},
 		"traces": {
 			"enabled": true,
-			"destinations": ["signoz-traces"],
+			"destinations": [
+				"signoz-traces"
+			],
 			"head_sampling_rate": 1,
 			"persist": true
 		}
@@ -48,11 +52,18 @@
 		{
 			"pattern": "*.yipyaps.com/*",
 			"zone_name": "yipyaps.com"
+		},
+		{
+			"pattern": "yipyaps.com",
+			"zone_name": "yipyaps.com",
+			"custom_domain": true
 		}
 	],
 	"workers_dev": true,
 	"preview_urls": true,
-	"placement": { "mode": "smart" },
+	"placement": {
+		"mode": "smart"
+	},
 	/**
 	 * Bindings
 	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
