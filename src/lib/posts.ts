@@ -18,7 +18,7 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 }
 
 const cityMiddleware = createMiddleware().server(async ({ next, request }) => {
-  const cf = (request as any).cf
+  const cf = (request as Request & { cf?: unknown }).cf
   const url = new URL(request.url)
   const hostname = url.hostname
 
@@ -46,15 +46,24 @@ export const getPosts = createServerFn({ method: 'GET' })
     const { env } = await import(/* @vite-ignore */ 'cloudflare:workers')
     const db = getDb(env.DB)
 
+    console.log('[getPosts] Request:', {
+      viewCity: data?.viewCity,
+      hasCoords: data?.userLat !== undefined,
+      subdomain: context.subdomain,
+      userCitySlug: context.userCitySlug,
+    })
+
     try {
       // If viewing a specific city (from dropdown), show all posts from that city
       if (data?.viewCity) {
-        return await db
+        const result = await db
           .select()
           .from(posts)
           .where(eq(posts.city, data.viewCity))
           .orderBy(desc(posts.createdAt))
           .all()
+        console.log('[getPosts] Returned', result.length, 'posts for city:', data.viewCity)
+        return result
       }
 
       // Nearby = your city + 20mi radius
@@ -68,7 +77,7 @@ export const getPosts = createServerFn({ method: 'GET' })
       const userCity = context.subdomain || context.userCitySlug
       const hasCoords = data?.userLat !== undefined && data?.userLng !== undefined
 
-      return allPosts.filter(post => {
+      const filtered = allPosts.filter(post => {
         // Include all posts from user's city
         if (userCity && post.city === userCity) return true
 
@@ -82,9 +91,16 @@ export const getPosts = createServerFn({ method: 'GET' })
 
         return false
       })
+
+      console.log('[getPosts] Returned', filtered.length, 'of', allPosts.length, 'posts for user city:', userCity)
+      return filtered
     } catch (error) {
-      console.error('[getPosts] Error:', error)
-      throw error
+      console.error('[getPosts] Database error:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        context: { viewCity: data?.viewCity, subdomain: context.subdomain },
+      })
+      throw new Error('Failed to load posts. Please try again.')
     }
   })
 
@@ -98,13 +114,25 @@ export const createPost = createServerFn({ method: 'POST' })
     const { content, latitude, longitude } = data
     const { subdomain, canPost, isLocalDev } = context
 
+    console.log('[createPost] Request received:', {
+      content: content?.substring(0, 50),
+      latitude,
+      longitude,
+      subdomain,
+      canPost,
+      isLocalDev,
+      dataCity: data.city,
+    })
+
     if (!content?.trim()) {
+      console.error('[createPost] Validation failed: empty content')
       throw new Error('Post content is required')
     }
 
     const city = isLocalDev ? (data.city || 'dev') : subdomain
 
     if (!city) {
+      console.error('[createPost] Validation failed: no city', { subdomain, isLocalDev })
       throw new Error('Posts can only be created on city subdomains')
     }
 
@@ -113,19 +141,35 @@ export const createPost = createServerFn({ method: 'POST' })
       throw new Error(`You must be in ${subdomain} to post here`)
     }
 
+    const insertValues = {
+      content: content.trim(),
+      city,
+      latitude: latitude !== undefined ? String(latitude) : null,
+      longitude: longitude !== undefined ? String(longitude) : null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
+
+    console.log('[createPost] Inserting:', {
+      ...insertValues,
+      content: insertValues.content.substring(0, 50),
+    })
+
     try {
-      return await db
+      const result = await db
         .insert(posts)
-        .values({
-          content: content.trim(),
-          city,
-          latitude: latitude !== undefined ? String(latitude) : null,
-          longitude: longitude !== undefined ? String(longitude) : null,
-        })
+        .values(insertValues)
         .returning()
+
+      console.log('[createPost] Success:', { postId: result[0]?.id, city })
+      return result
     } catch (error) {
-      console.error('[createPost] Database error:', error)
-      throw error
+      console.error('[createPost] Database error:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        insertValues: { ...insertValues, content: insertValues.content.substring(0, 50) },
+      })
+      throw new Error('Failed to create post. Please try again.')
     }
   })
 
@@ -134,6 +178,8 @@ export const getCities = createServerFn({ method: 'GET' })
     const { env } = await import(/* @vite-ignore */ 'cloudflare:workers')
     const db = getDb(env.DB)
 
+    console.log('[getCities] Fetching all cities')
+
     try {
       const result = await db
         .select({ city: posts.city })
@@ -141,9 +187,14 @@ export const getCities = createServerFn({ method: 'GET' })
         .groupBy(posts.city)
         .all()
 
-      return result.map(r => r.city)
+      const cities = result.map(r => r.city)
+      console.log('[getCities] Found', cities.length, 'cities:', cities)
+      return cities
     } catch (error) {
-      console.error('[getCities] Error:', error)
-      throw error
+      console.error('[getCities] Database error:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
+      throw new Error('Failed to load cities. Please try again.')
     }
   })

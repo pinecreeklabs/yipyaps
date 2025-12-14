@@ -46,12 +46,13 @@ export function CityOnboardingModal({ open }: CityOnboardingModalProps) {
       setCityName(result.cityName)
       setCitySlug(result.citySlug)
       setState('found')
-    } catch (err: any) {
+    } catch (err) {
       console.error('[CityOnboarding] Error:', err)
-      if (err && typeof err.code === 'number') {
-        if (err.code === 1) {
+      if (err && typeof err === 'object' && 'code' in err && typeof err.code === 'number') {
+        const geolocationError = err as GeolocationPositionError
+        if (geolocationError.code === 1) {
           setError('Location permission denied. Please enable location access.')
-        } else if (err.code === 2) {
+        } else if (geolocationError.code === 2) {
           setError('Location unavailable. Please try again.')
         } else {
           setError('Location request timed out. Please try again.')

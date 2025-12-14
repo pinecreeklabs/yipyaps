@@ -35,7 +35,7 @@ export function parseCookie(cookieHeader: string | null, name: string): string |
 }
 
 const geolocationMiddleware = createMiddleware().server(async ({ next, request }) => {
-  const cf = (request as any).cf
+  const cf = (request as Request & { cf?: unknown }).cf
   const url = new URL(request.url)
   const hostname = url.hostname
 
@@ -74,6 +74,16 @@ export interface ResolveCityResult {
   citySlug: string
 }
 
+interface GeocodeResponse {
+  status: string
+  results?: Array<{
+    address_components: Array<{
+      types: string[]
+      long_name: string
+    }>
+  }>
+}
+
 export const resolveCityFromCoords = createServerFn({ method: 'POST' })
   .inputValidator((data: { latitude: number; longitude: number }) => {
     if (typeof data.latitude !== 'number' || typeof data.longitude !== 'number') {
@@ -86,7 +96,7 @@ export const resolveCityFromCoords = createServerFn({ method: 'POST' })
   })
   .handler(async ({ data }): Promise<ResolveCityResult> => {
     const { env } = await import(/* @vite-ignore */ 'cloudflare:workers')
-    const apiKey = (env as any).GOOGLE_MAPS_API_KEY
+    const apiKey = (env as { GOOGLE_MAPS_API_KEY?: string }).GOOGLE_MAPS_API_KEY
 
     if (!apiKey) {
       throw new Error('GOOGLE_MAPS_API_KEY not configured')
@@ -112,7 +122,7 @@ export const resolveCityFromCoords = createServerFn({ method: 'POST' })
         throw new Error(`Google Geocoding API error: ${response.status}`)
       }
 
-      const result = await response.json()
+      const result = await response.json() as GeocodeResponse
 
       if (result.status !== 'OK' || !result.results?.length) {
         throw new Error(`Geocoding failed: ${result.status}`)

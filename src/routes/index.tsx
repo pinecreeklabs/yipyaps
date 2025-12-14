@@ -157,20 +157,25 @@ function Home() {
       } else {
         window.location.href = `https://${result.citySlug}.yipyaps.com`
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('[FindCity] Error:', error)
-      if (error && typeof error.code === 'number') {
+      if (error && typeof error === 'object' && 'code' in error && typeof error.code === 'number') {
         // GeolocationPositionError
-        if (error.code === 1) { // PERMISSION_DENIED
+        const geolocationError = error as GeolocationPositionError
+        if (geolocationError.code === 1) { // PERMISSION_DENIED
           setLocationError('Location permission denied. Please enable location access to find your city.')
-        } else if (error.code === 2) { // POSITION_UNAVAILABLE
+        } else if (geolocationError.code === 2) { // POSITION_UNAVAILABLE
           setLocationError('Location unavailable. Please try again.')
         } else { // TIMEOUT
           setLocationError('Location request timed out. Please try again.')
         }
       } else {
         // Server error - extract message if available
-        const errorMessage = error?.message || error?.data?.message || String(error)
+        const errorMessage = error && typeof error === 'object' && 'message' in error
+          ? String(error.message)
+          : error && typeof error === 'object' && 'data' in error && error.data && typeof error.data === 'object' && 'message' in error.data
+            ? String(error.data.message)
+            : String(error)
         if (errorMessage.includes('GOOGLE_MAPS_API_KEY')) {
           setLocationError('Location service not configured. Please contact support.')
         } else if (errorMessage.includes('Geocoding failed')) {
