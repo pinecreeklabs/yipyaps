@@ -13,14 +13,6 @@ const cityMiddleware = createMiddleware().server(async ({ next, request }) => {
   const userCitySlug = normalizeCitySlug(cf?.city || null)
   const canPost = isLocalDev || (!!subdomain && userCitySlug === subdomain)
 
-  console.log('[Posts Middleware]', {
-    hostname,
-    subdomain,
-    userCitySlug,
-    canPost,
-    isLocalDev,
-  })
-
   return next({
     context: { subdomain, userCitySlug, canPost, isLocalDev },
   })
@@ -33,23 +25,15 @@ export const getPosts = createServerFn({ method: 'GET' })
     const db = getDb(env.DB)
 
     try {
-      // Filter by city if on subdomain, otherwise return all (dev mode)
-      let result
       if (context.subdomain) {
-        console.log('[getPosts] Fetching posts for city:', context.subdomain)
-        result = await db
+        return await db
           .select()
           .from(posts)
           .where(eq(posts.city, context.subdomain))
           .orderBy(desc(posts.createdAt))
           .all()
-      } else {
-        console.log('[getPosts] Fetching all posts (dev mode)')
-        result = await db.select().from(posts).orderBy(desc(posts.createdAt)).all()
       }
-
-      console.log('[getPosts] Found', result.length, 'posts')
-      return result
+      return await db.select().from(posts).orderBy(desc(posts.createdAt)).all()
     } catch (error) {
       console.error('[getPosts] Error:', error)
       throw error
@@ -66,23 +50,13 @@ export const createPost = createServerFn({ method: 'POST' })
     const { content } = data
     const { subdomain, canPost, isLocalDev } = context
 
-    console.log('[createPost] Attempting to create post', {
-      subdomain,
-      canPost,
-      isLocalDev,
-      contentLength: content?.length,
-    })
-
     if (!content?.trim()) {
-      console.error('[createPost] Validation failed: content is required')
       throw new Error('Post content is required')
     }
 
-    // In dev mode, use provided city or default to 'dev'
     const city = isLocalDev ? (data.city || 'dev') : subdomain
 
     if (!city) {
-      console.error('[createPost] Validation failed: no city')
       throw new Error('Posts can only be created on city subdomains')
     }
 
@@ -92,18 +66,10 @@ export const createPost = createServerFn({ method: 'POST' })
     }
 
     try {
-      const result = await db
+      return await db
         .insert(posts)
         .values({ content: content.trim(), city })
         .returning()
-
-      console.log('[createPost] Successfully created post:', {
-        id: result[0]?.id,
-        city,
-        contentLength: content.trim().length,
-      })
-
-      return result
     } catch (error) {
       console.error('[createPost] Database error:', error)
       throw error

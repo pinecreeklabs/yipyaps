@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { getCityContext, reverseGeocode, type CityContext } from '../lib/geolocation'
+import { getCityContext, type CityContext } from '../lib/geolocation'
 import { getPosts, createPost } from '../lib/posts'
 import { Card } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -10,12 +10,10 @@ import type { Post } from '../db/schema'
 export const Route = createFileRoute('/')({
   component: Home,
   loader: async (): Promise<{ cityContext: CityContext; posts: Post[] }> => {
-    console.log('[Route Loader] Loading home page')
     const cityContext = await getCityContext()
 
     // Redirect to user's city on main domain (prod only)
     if (!cityContext.isLocalDev && !cityContext.subdomain && cityContext.userCitySlug) {
-      console.log('[Route Loader] Redirecting to city subdomain:', cityContext.userCitySlug)
       throw redirect({
         href: `https://${cityContext.userCitySlug}.yipyaps.com`,
         statusCode: 302,
@@ -23,7 +21,6 @@ export const Route = createFileRoute('/')({
     }
 
     const posts = await getPosts()
-    console.log('[Route Loader] Loaded', posts.length, 'posts for', cityContext.subdomain || 'all cities')
     return { cityContext, posts }
   },
 })
@@ -59,7 +56,6 @@ const NOTE_COLORS = [
 const ROTATIONS = ['rotate-[-2deg]', 'rotate-[1.5deg]', 'rotate-[-1deg]', 'rotate-[2deg]', 'rotate-[0.5deg]', 'rotate-[-1.5deg]']
 
 function getRandomColor(postId: number): string {
-  // Use post ID to generate a consistent random color
   return NOTE_COLORS[postId % NOTE_COLORS.length]
 }
 
@@ -68,56 +64,17 @@ function Home() {
   const [posts, setPosts] = useState<Post[]>(initialPosts)
   const [noteText, setNoteText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [browserCity, setBrowserCity] = useState<{ city: string; slug: string } | null>(null)
-  const [canPostFromBrowser, setCanPostFromBrowser] = useState(false)
 
   useEffect(() => {
-    console.log('[client] cityContext:', cityContext)
-    if (cityContext.isLocalDev) {
-      console.log('[client] Skipping browser geolocation (local dev)')
-      return
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        console.log('[client] Browser position:', { lat: position.coords.latitude, lng: position.coords.longitude })
-        const result = await reverseGeocode({
-          data: { lat: position.coords.latitude, lng: position.coords.longitude },
-        })
-        console.log('[client] Reverse geocode result:', result)
-        if (result.city && result.citySlug) {
-          if (result.citySlug === cityContext.subdomain) {
-            console.log('[client] Browser city matches subdomain, enabling posting')
-            setCanPostFromBrowser(true)
-          } else if (result.citySlug !== cityContext.userCitySlug) {
-            console.log('[client] Browser city differs from CF city:', { browser: result.citySlug, cf: cityContext.userCitySlug })
-            setBrowserCity({ city: result.city, slug: result.citySlug })
-          }
-        }
-      },
-      (err) => {
-        console.log('[client] Geolocation error:', err.message)
-      },
-      { enableHighAccuracy: false, timeout: 10000 }
-    )
-  }, [cityContext.isLocalDev, cityContext.userCitySlug, cityContext.subdomain])
-
-  // Poll for new posts every 5 seconds
-  useEffect(() => {
-    const pollPosts = async () => {
+    const interval = setInterval(async () => {
       try {
         const freshPosts = await getPosts()
         setPosts(freshPosts)
-      } catch (err) {
-        console.log('[client] Poll error:', err)
-      }
-    }
-
-    const interval = setInterval(pollPosts, 5000)
+      } catch {}
+    }, 5000)
     return () => clearInterval(interval)
   }, [])
 
-  const canPost = cityContext.canPost || canPostFromBrowser
   const cityName = cityContext.subdomain ? formatCityName(cityContext.subdomain) : (cityContext.isLocalDev ? 'Dev Mode' : 'Your City')
   const charCount = noteText.trim().length
 
@@ -127,7 +84,6 @@ function Home() {
     try {
       await createPost({ data: { content: noteText.trim() } })
       setNoteText('')
-      // Fetch fresh posts to show our new post plus any others
       const freshPosts = await getPosts()
       setPosts(freshPosts)
     } finally {
@@ -147,20 +103,6 @@ function Home() {
           </p>
         </header>
 
-        {browserCity && browserCity.slug !== cityContext.subdomain && (
-          <Card className="mb-8 border-2 border-primary/30 bg-primary/10 p-4 text-center">
-            <p className="text-sm text-foreground">
-              Looks like you're in <strong>{browserCity.city}</strong>, not {cityContext.userCity || 'here'}.
-            </p>
-            <a
-              href={`https://${browserCity.slug}.yipyaps.com`}
-              className="mt-2 inline-block text-sm font-medium text-primary underline"
-            >
-              Go to {browserCity.city} →
-            </a>
-          </Card>
-        )}
-
         <div className="mb-12 flex justify-center">
           <div className="flex items-baseline gap-2 rounded-full bg-secondary/20 px-6 py-3">
             <span className="text-4xl font-bold text-secondary">{posts.length.toLocaleString()}</span>
@@ -168,7 +110,7 @@ function Home() {
           </div>
         </div>
 
-        {canPost ? (
+        {cityContext.canPost ? (
           <Card className="mb-16 rotate-[-1deg] border-2 border-secondary/30 bg-secondary/10 p-6 shadow-lg transition-transform hover:scale-[1.01] dark:bg-secondary/5">
             <Textarea
               placeholder="Share a quick note..."
