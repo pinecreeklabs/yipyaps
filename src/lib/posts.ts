@@ -1,7 +1,7 @@
 import { createServerFn, createMiddleware } from '@tanstack/react-start'
 import { getDb, posts } from '@/db'
 import { desc, eq } from 'drizzle-orm'
-import { extractSubdomain, normalizeCitySlug } from './geolocation'
+import { extractSubdomain, parseCookie } from './geolocation'
 
 const cityMiddleware = createMiddleware().server(async ({ next, request }) => {
   const cf = (request as any).cf
@@ -10,8 +10,15 @@ const cityMiddleware = createMiddleware().server(async ({ next, request }) => {
 
   const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1' || !cf
   const subdomain = isLocalDev ? null : extractSubdomain(hostname)
-  const userCitySlug = normalizeCitySlug(cf?.city || null)
-  const canPost = isLocalDev || (!!subdomain && userCitySlug === subdomain)
+  
+  // Read GPS-derived city slug from cookie (no IP fallback)
+  const cookieHeader = request.headers.get('cookie')
+  const cookieCitySlug = parseCookie(cookieHeader, 'yipyaps_city_slug')
+  
+  const userCitySlug = cookieCitySlug || null
+  
+  // canPost is true if: local dev OR (on subdomain AND cookie matches subdomain)
+  const canPost = isLocalDev || (!!subdomain && !!cookieCitySlug && cookieCitySlug === subdomain)
 
   return next({
     context: { subdomain, userCitySlug, canPost, isLocalDev },

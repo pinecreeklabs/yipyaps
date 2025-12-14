@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { getCityContext, type CityContext } from '../lib/geolocation'
+import { getCityContext, resolveCityFromCoords, type CityContext } from '../lib/geolocation'
 import { getPosts, createPost } from '../lib/posts'
 import { Card } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -12,7 +12,7 @@ export const Route = createFileRoute('/')({
   loader: async (): Promise<{ cityContext: CityContext; posts: Post[] }> => {
     const cityContext = await getCityContext()
 
-    // Redirect to user's city on main domain (prod only)
+    // Redirect to user's city on main domain ONLY if GPS cookie exists (no IP fallback)
     if (!cityContext.isLocalDev && !cityContext.subdomain && cityContext.userCitySlug) {
       throw redirect({
         href: `https://${cityContext.userCitySlug}.yipyaps.com`,
@@ -64,6 +64,8 @@ function Home() {
   const [posts, setPosts] = useState<Post[]>(initialPosts)
   const [noteText, setNoteText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLocating, setIsLocating] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -77,6 +79,58 @@ function Home() {
 
   const cityName = cityContext.subdomain ? formatCityName(cityContext.subdomain) : (cityContext.isLocalDev ? 'Dev Mode' : 'Your City')
   const charCount = noteText.trim().length
+
+  const handleFindCity = async () => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser')
+      return
+    }
+
+    setIsLocating(true)
+    setLocationError(null)
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        })
+      })
+
+      const { latitude, longitude } = position.coords
+
+      // Call server function to reverse geocode
+      const result = await resolveCityFromCoords({ data: { latitude, longitude } })
+
+      // Set cross-subdomain cookie
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      const cookieDomain = isLocalhost ? '' : '; Domain=.yipyaps.com'
+      const secureFlag = isLocalhost ? '' : '; Secure'
+      document.cookie = `yipyaps_city_slug=${result.citySlug}; Path=/; Max-Age=86400${secureFlag}; SameSite=Lax${cookieDomain}`
+
+      // Redirect to city subdomain (or reload on localhost)
+      if (isLocalhost) {
+        window.location.reload()
+      } else {
+        window.location.href = `https://${result.citySlug}.yipyaps.com`
+      }
+    } catch (error: any) {
+      if (error && typeof error.code === 'number') {
+        // GeolocationPositionError
+        if (error.code === 1) { // PERMISSION_DENIED
+          setLocationError('Location permission denied. Please enable location access to find your city.')
+        } else if (error.code === 2) { // POSITION_UNAVAILABLE
+          setLocationError('Location unavailable. Please try again.')
+        } else { // TIMEOUT
+          setLocationError('Location request timed out. Please try again.')
+        }
+      } else {
+        setLocationError('Failed to determine your city. Please try again.')
+      }
+      setIsLocating(false)
+    }
+  }
 
   const handlePost = async () => {
     if (!noteText.trim() || isSubmitting || charCount > 140) return
@@ -101,6 +155,20 @@ function Home() {
           <p className="mt-3 text-balance text-lg text-muted-foreground md:text-xl">
             Notes from {cityName}
           </p>
+          {!cityContext.isLocalDev && !cityContext.subdomain && !cityContext.userCitySlug && (
+            <div className="mt-6">
+              <Button
+                onClick={handleFindCity}
+                disabled={isLocating}
+                className="bg-primary font-medium text-primary-foreground shadow-md hover:bg-primary/90"
+              >
+                {isLocating ? 'Finding your city...' : 'Find my city'}
+              </Button>
+              {locationError && (
+                <p className="mt-3 text-sm text-destructive">{locationError}</p>
+              )}
+            </div>
+          )}
         </header>
 
         <div className="mb-12 flex justify-center">
@@ -132,9 +200,25 @@ function Home() {
         ) : (
           <Card className="mb-16 rotate-[1deg] border-2 border-muted bg-muted/50 p-6 text-center shadow-md">
             <p className="text-sm font-medium text-muted-foreground">
-              Posting is only available if you're in {cityName}
+              {cityContext.subdomain
+                ? `Verify you're in ${cityName} to post`
+                : 'Posting is only available if you\'re in your city'}
             </p>
-            {cityContext.userCitySlug && (
+            {cityContext.subdomain ? (
+              <div className="mt-4">
+                <Button
+                  onClick={handleFindCity}
+                  disabled={isLocating}
+                  variant="outline"
+                  className="font-medium"
+                >
+                  {isLocating ? 'Verifying...' : 'Verify location'}
+                </Button>
+                {locationError && (
+                  <p className="mt-3 text-xs text-destructive">{locationError}</p>
+                )}
+              </div>
+            ) : cityContext.userCitySlug ? (
               <p className="mt-2 text-xs text-muted-foreground">
                 Visit{' '}
                 <a href={`https://${cityContext.userCitySlug}.yipyaps.com`} className="text-primary underline">
@@ -142,7 +226,7 @@ function Home() {
                 </a>{' '}
                 to post from {cityContext.userCity}
               </p>
-            )}
+            ) : null}
           </Card>
         )}
 
