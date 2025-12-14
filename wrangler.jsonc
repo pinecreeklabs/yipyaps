@@ -52,7 +52,7 @@
 	],
 	"workers_dev": true,
 	"preview_urls": true,
-	"placement": { "mode": "smart" }
+	"placement": { "mode": "smart" },
 	/**
 	 * Bindings
 	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
