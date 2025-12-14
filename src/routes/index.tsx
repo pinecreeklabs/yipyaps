@@ -5,6 +5,7 @@ import { getPosts, createPost } from '../lib/posts'
 import { Card } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Textarea } from '../components/ui/textarea'
+import { CityOnboardingModal } from '../components/city-onboarding-modal'
 import type { Post } from '../db/schema'
 
 export const Route = createFileRoute('/')({
@@ -116,6 +117,7 @@ function Home() {
         window.location.href = `https://${result.citySlug}.yipyaps.com`
       }
     } catch (error: any) {
+      console.error('[FindCity] Error:', error)
       if (error && typeof error.code === 'number') {
         // GeolocationPositionError
         if (error.code === 1) { // PERMISSION_DENIED
@@ -126,7 +128,15 @@ function Home() {
           setLocationError('Location request timed out. Please try again.')
         }
       } else {
-        setLocationError('Failed to determine your city. Please try again.')
+        // Server error - extract message if available
+        const errorMessage = error?.message || error?.data?.message || String(error)
+        if (errorMessage.includes('GOOGLE_MAPS_API_KEY')) {
+          setLocationError('Location service not configured. Please contact support.')
+        } else if (errorMessage.includes('Geocoding failed')) {
+          setLocationError('Could not determine your city from GPS coordinates. Please try again.')
+        } else {
+          setLocationError(`Failed to determine your city: ${errorMessage}`)
+        }
       }
       setIsLocating(false)
     }
@@ -155,21 +165,9 @@ function Home() {
           <p className="mt-3 text-balance text-lg text-muted-foreground md:text-xl">
             Notes from {cityName}
           </p>
-          {!cityContext.isLocalDev && !cityContext.subdomain && !cityContext.userCitySlug && (
-            <div className="mt-6">
-              <Button
-                onClick={handleFindCity}
-                disabled={isLocating}
-                className="bg-primary font-medium text-primary-foreground shadow-md hover:bg-primary/90"
-              >
-                {isLocating ? 'Finding your city...' : 'Find my city'}
-              </Button>
-              {locationError && (
-                <p className="mt-3 text-sm text-destructive">{locationError}</p>
-              )}
-            </div>
-          )}
         </header>
+
+        <CityOnboardingModal open={!cityContext.subdomain && !cityContext.userCitySlug} />
 
         <div className="mb-12 flex justify-center">
           <div className="flex items-baseline gap-2 rounded-full bg-secondary/20 px-6 py-3">

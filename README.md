@@ -16,48 +16,94 @@ A modern web app built with React, TanStack Router, and Cloudflare Pages.
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│              Cloudflare detects user's city via request.cf                  │
-│                     (e.g., city = "San Francisco")                          │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      │
-                                      ▼
                          ┌────────────────────────┐
-                         │  Has subdomain?        │
-                         │  (e.g., sf.yipyaps.com)│
+                         │  Has GPS cookie?       │
+                         │  (yipyaps_city_slug)   │
                          └────────────────────────┘
                             │                │
-                           No               Yes
+                          Yes               No
                             │                │
                             ▼                ▼
               ┌──────────────────┐    ┌─────────────────────────┐
-              │ Redirect 302 to  │    │ Compare subdomain with  │
-              │ {city}.yipyaps.com│    │ user's detected city    │
-              │                  │    │                         │
-              │ san-francisco ───┼───▶│ subdomain = user city?  │
+              │ Redirect 302 to  │    │ Show CityOnboardingModal│
+              │ {citySlug}.yipyaps.com│    │                         │
+              │                  │    │ User clicks "Find my city"│
+              │ nashville ───────┼───▶│                         │
               └──────────────────┘    └─────────────────────────┘
                                               │
-                              ┌───────────────┴───────────────┐
-                              │                               │
-                            Match                          No Match
-                              │                               │
-                              ▼                               ▼
-                    ┌─────────────────┐             ┌─────────────────┐
-                    │   canPost: true │             │  canPost: false │
-                    │                 │             │                 │
-                    │ User can read   │             │ User can read   │
-                    │ AND post notes  │             │ but NOT post    │
-                    └─────────────────┘             └─────────────────┘
+                                              ▼
+                         ┌─────────────────────────────────┐
+                         │ Request browser geolocation     │
+                         │ (GPS permission)                │
+                         └─────────────────────────────────┘
+                                              │
+                                              ▼
+                         ┌─────────────────────────────────┐
+                         │ Get coordinates (lat, lng)      │
+                         └─────────────────────────────────┘
+                                              │
+                                              ▼
+                         ┌─────────────────────────────────┐
+                         │ Reverse geocode via             │
+                         │ Google Maps API                 │
+                         │ → Extract city name            │
+                         └─────────────────────────────────┘
+                                              │
+                                              ▼
+                         ┌─────────────────────────────────┐
+                         │ Set cookie:                     │
+                         │ yipyaps_city_slug={citySlug}    │
+                         │ (cross-subdomain, 24hr expiry) │
+                         └─────────────────────────────────┘
+                                              │
+                                              ▼
+                         ┌─────────────────────────────────┐
+                         │ Redirect to                     │
+                         │ {citySlug}.yipyaps.com          │
+                         └─────────────────────────────────┘
+                                              │
+                                              ▼
+                         ┌────────────────────────┐
+                         │  On city subdomain     │
+                         │  (e.g., nashville.yipyaps.com)│
+                         └────────────────────────┘
+                            │                │
+                            ▼                ▼
+              ┌──────────────────┐    ┌─────────────────────────┐
+              │ Check cookie      │    │ Filter posts by        │
+              │ matches subdomain?│    │ subdomain              │
+              │                  │    │                         │
+              │ cookie = "nashville"│    │ Only show posts from   │
+              │ subdomain = "nashville"│ │ nashville             │
+              └──────────────────┘    └─────────────────────────┘
+                            │
+                            ▼
+              ┌─────────────────────────┐
+              │ cookie === subdomain?   │
+              └─────────────────────────┘
+                  │                │
+                Yes               No
+                  │                │
+                  ▼                ▼
+      ┌─────────────────┐    ┌─────────────────┐
+      │   canPost: true │    │  canPost: false │
+      │                 │    │                 │
+      │ User can read   │    │ User can read   │
+      │ AND post notes  │    │ but NOT post    │
+      │                 │    │ (show "Verify   │
+      │                 │    │  location" btn) │
+      └─────────────────┘    └─────────────────┘
 ```
 
 ### Example Scenarios
 
-| User Location | URL Visited | Result |
-|--------------|-------------|--------|
-| San Francisco | yipyaps.com | → Redirected to san-francisco.yipyaps.com |
-| San Francisco | san-francisco.yipyaps.com | Can post and read |
-| San Francisco | new-york.yipyaps.com | Can only read (wrong city) |
-| localhost | localhost:3000 | Dev mode: can post anywhere |
+| User Location | URL Visited | GPS Cookie | Result |
+|--------------|-------------|------------|--------|
+| Nashville | yipyaps.com | None | → CityOnboardingModal → GPS → Redirect to nashville.yipyaps.com |
+| Nashville | yipyaps.com | nashville | → Auto-redirect to nashville.yipyaps.com |
+| Nashville | nashville.yipyaps.com | nashville | Can post and read (cookie matches) |
+| Nashville | knoxville.yipyaps.com | nashville | Can only read (cookie doesn't match) |
+| localhost | localhost:3000 | N/A | Dev mode: can post anywhere |
 
 ## Development
 
