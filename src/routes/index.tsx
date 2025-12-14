@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react'
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { getCityContext, resolveCityFromCoords, type CityContext } from '../lib/geolocation'
-import { getPosts, createPost } from '../lib/posts'
+import { getPosts, createPost, getCities } from '../lib/posts'
 import { Card } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Textarea } from '../components/ui/textarea'
 import { CityOnboardingModal } from '../components/city-onboarding-modal'
 import type { Post } from '../db/schema'
 
+interface UserLocation {
+  latitude: number
+  longitude: number
+}
+
 export const Route = createFileRoute('/')({
   component: Home,
-  loader: async (): Promise<{ cityContext: CityContext; posts: Post[] }> => {
+  loader: async (): Promise<{ cityContext: CityContext; cities: string[] }> => {
     const cityContext = await getCityContext()
 
     // Redirect to user's city on main domain ONLY if GPS cookie exists (no IP fallback)
@@ -21,8 +26,8 @@ export const Route = createFileRoute('/')({
       })
     }
 
-    const posts = await getPosts()
-    return { cityContext, posts }
+    const cities = await getCities()
+    return { cityContext, cities }
   },
 })
 
@@ -61,24 +66,60 @@ function getRandomColor(postId: number): string {
 }
 
 function Home() {
-  const { cityContext, posts: initialPosts } = Route.useLoaderData()
-  const [posts, setPosts] = useState<Post[]>(initialPosts)
+  const { cityContext, cities } = Route.useLoaderData()
+  const [posts, setPosts] = useState<Post[]>([])
   const [noteText, setNoteText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLocating, setIsLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
+  const [viewCity, setViewCity] = useState<string | null>(null)
 
+  const isOnboarding = !cityContext.subdomain && !cityContext.userCitySlug
+
+  // Fetch posts when user has location or is viewing a specific city
   useEffect(() => {
-    const interval = setInterval(async () => {
+    if (isOnboarding) return
+
+    const fetchPosts = async () => {
       try {
-        const freshPosts = await getPosts()
+        const freshPosts = await getPosts({
+          data: viewCity
+            ? { viewCity }
+            : userLocation
+              ? { userLat: userLocation.latitude, userLng: userLocation.longitude }
+              : undefined
+        })
         setPosts(freshPosts)
       } catch {}
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [])
+    }
 
-  const cityName = cityContext.subdomain ? formatCityName(cityContext.subdomain) : (cityContext.isLocalDev ? 'Dev Mode' : 'Your City')
+    fetchPosts()
+    const interval = setInterval(fetchPosts, 5000)
+    return () => clearInterval(interval)
+  }, [isOnboarding, userLocation, viewCity])
+
+  // Get user location on mount (after onboarding)
+  useEffect(() => {
+    if (isOnboarding || userLocation) return
+
+    navigator.geolocation?.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        })
+      },
+      () => {}, // Silently fail, posts will use subdomain fallback
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+    )
+  }, [isOnboarding, userLocation])
+
+  const cityName = cityContext.subdomain
+    ? formatCityName(cityContext.subdomain)
+    : cityContext.userCitySlug
+      ? formatCityName(cityContext.userCitySlug)
+      : 'Your Area'
   const charCount = noteText.trim().length
 
   const handleFindCity = async () => {
@@ -146,9 +187,19 @@ function Home() {
     if (!noteText.trim() || isSubmitting || charCount > 140) return
     setIsSubmitting(true)
     try {
-      await createPost({ data: { content: noteText.trim() } })
+      await createPost({
+        data: {
+          content: noteText.trim(),
+          latitude: userLocation?.latitude,
+          longitude: userLocation?.longitude,
+        }
+      })
       setNoteText('')
-      const freshPosts = await getPosts()
+      const freshPosts = await getPosts({
+        data: userLocation
+          ? { userLat: userLocation.latitude, userLng: userLocation.longitude }
+          : undefined
+      })
       setPosts(freshPosts)
     } finally {
       setIsSubmitting(false)
@@ -162,95 +213,121 @@ function Home() {
           <h1 className="text-balance font-[family-name:var(--font-display)] text-7xl font-bold tracking-tight text-primary md:text-8xl">
             Yipyaps
           </h1>
-          <p className="mt-3 text-balance text-lg text-muted-foreground md:text-xl">
-            Notes from {cityName}
-          </p>
+          {isOnboarding ? (
+            <p className="mt-3 text-balance text-lg text-muted-foreground md:text-xl">
+              Share quick notes with your city
+            </p>
+          ) : (
+            <div className="mt-3 flex items-center justify-center gap-2 text-lg text-muted-foreground md:text-xl">
+              <span>Notes from</span>
+              <select
+                value={viewCity || ''}
+                onChange={(e) => setViewCity(e.target.value || null)}
+                className="cursor-pointer appearance-none border-b-2 border-dashed border-primary/40 bg-transparent px-1 font-medium text-primary hover:border-primary focus:border-primary focus:outline-none"
+              >
+                <option value="">{cityName} + Nearby</option>
+                {cities.map((city) => (
+                  <option key={city} value={city}>
+                    {formatCityName(city)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </header>
 
-        <CityOnboardingModal open={!cityContext.subdomain && !cityContext.userCitySlug} />
+        <CityOnboardingModal open={isOnboarding} />
 
-        <div className="mb-12 flex justify-center">
-          <div className="flex items-baseline gap-2 rounded-full bg-secondary/20 px-6 py-3">
-            <span className="text-4xl font-bold text-secondary">{posts.length.toLocaleString()}</span>
-            <span className="text-sm font-medium text-muted-foreground">posts</span>
-          </div>
-        </div>
-
-        {cityContext.canPost ? (
-          <Card className="mb-16 rotate-[-1deg] border-2 border-secondary/30 bg-secondary/10 p-6 shadow-lg transition-transform hover:scale-[1.01] dark:bg-secondary/5">
-            <Textarea
-              placeholder="Share a quick note..."
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              className="mb-4 min-h-[100px] resize-none border-0 bg-transparent text-base text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
-            />
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-muted-foreground">{charCount} / 140</span>
-              <Button
-                onClick={handlePost}
-                disabled={!noteText.trim() || charCount > 140 || isSubmitting}
-                className="bg-primary font-medium text-primary-foreground shadow-md hover:bg-primary/90"
-              >
-                {isSubmitting ? 'Posting...' : 'Post'}
-              </Button>
-            </div>
-          </Card>
-        ) : (
-          <Card className="mb-16 rotate-[1deg] border-2 border-muted bg-muted/50 p-6 text-center shadow-md">
-            <p className="text-sm font-medium text-muted-foreground">
-              {cityContext.subdomain
-                ? `Verify you're in ${cityName} to post`
-                : 'Posting is only available if you\'re in your city'}
-            </p>
-            {cityContext.subdomain ? (
-              <div className="mt-4">
-                <Button
-                  onClick={handleFindCity}
-                  disabled={isLocating}
-                  variant="outline"
-                  className="font-medium"
-                >
-                  {isLocating ? 'Verifying...' : 'Verify location'}
-                </Button>
-                {locationError && (
-                  <p className="mt-3 text-xs text-destructive">{locationError}</p>
-                )}
+        {!isOnboarding && (
+          <>
+            <div className="mb-12 flex justify-center">
+              <div className="flex items-baseline gap-2 rounded-full bg-secondary/20 px-6 py-3">
+                <span className="text-4xl font-bold text-secondary">{posts.length.toLocaleString()}</span>
+                <span className="text-sm font-medium text-muted-foreground">
+                  {viewCity ? 'posts' : 'posts nearby'}
+                </span>
               </div>
-            ) : cityContext.userCitySlug ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Visit{' '}
-                <a href={`https://${cityContext.userCitySlug}.yipyaps.com`} className="text-primary underline">
-                  {cityContext.userCitySlug}.yipyaps.com
-                </a>{' '}
-                to post from {cityContext.userCity}
-              </p>
-            ) : null}
-          </Card>
-        )}
+            </div>
 
-        <section className="space-y-8">
-          <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-foreground">
-            Latest Yips
-          </h2>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {posts.map((post) => (
-              <Card
-                key={post.id}
-                className={`${getRandomColor(post.id)} ${ROTATIONS[post.id % ROTATIONS.length]} border-2 p-6 shadow-md transition-all hover:scale-[1.03] hover:shadow-lg`}
-              >
-                <p className="text-pretty text-base font-medium leading-relaxed text-card-foreground">
-                  {post.content}
-                </p>
-                <p className="mt-4 text-xs font-medium text-muted-foreground">
-                  {formatTimeAgo(post.createdAt)}
-                </p>
+            {cityContext.canPost && !viewCity ? (
+              <Card className="mb-16 rotate-[-1deg] border-2 border-secondary/30 bg-secondary/10 p-6 shadow-lg transition-transform hover:scale-[1.01] dark:bg-secondary/5">
+                <Textarea
+                  placeholder="Share a quick note..."
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                  className="mb-4 min-h-[100px] resize-none border-0 bg-transparent text-base text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
+                />
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">{charCount} / 140</span>
+                  <Button
+                    onClick={handlePost}
+                    disabled={!noteText.trim() || charCount > 140 || isSubmitting}
+                    className="bg-primary font-medium text-primary-foreground shadow-md hover:bg-primary/90"
+                  >
+                    {isSubmitting ? 'Posting...' : 'Post'}
+                  </Button>
+                </div>
               </Card>
-            ))}
-          </div>
-          {posts.length === 0 && (
-            <p className="text-center text-muted-foreground">No yips yet. Be the first!</p>
-          )}
-        </section>
+            ) : !viewCity ? (
+              <Card className="mb-16 rotate-[1deg] border-2 border-muted bg-muted/50 p-6 text-center shadow-md">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {cityContext.subdomain
+                    ? `Verify you're in ${cityName} to post`
+                    : 'Posting is only available if you\'re in your city'}
+                </p>
+                {cityContext.subdomain ? (
+                  <div className="mt-4">
+                    <Button
+                      onClick={handleFindCity}
+                      disabled={isLocating}
+                      variant="outline"
+                      className="font-medium"
+                    >
+                      {isLocating ? 'Verifying...' : 'Verify location'}
+                    </Button>
+                    {locationError && (
+                      <p className="mt-3 text-xs text-destructive">{locationError}</p>
+                    )}
+                  </div>
+                ) : cityContext.userCitySlug ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Visit{' '}
+                    <a href={`https://${cityContext.userCitySlug}.yipyaps.com`} className="text-primary underline">
+                      {cityContext.userCitySlug}.yipyaps.com
+                    </a>{' '}
+                    to post from {cityContext.userCity}
+                  </p>
+                ) : null}
+              </Card>
+            ) : null}
+
+            <section className="space-y-8">
+              <h2 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-foreground">
+                {viewCity ? `Yips from ${formatCityName(viewCity)}` : 'Latest Yips'}
+              </h2>
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {posts.map((post) => (
+                  <Card
+                    key={post.id}
+                    className={`${getRandomColor(post.id)} ${ROTATIONS[post.id % ROTATIONS.length]} border-2 p-6 shadow-md transition-all hover:scale-[1.03] hover:shadow-lg`}
+                  >
+                    <p className="text-pretty text-base font-medium leading-relaxed text-card-foreground">
+                      {post.content}
+                    </p>
+                    <p className="mt-4 text-xs font-medium text-muted-foreground">
+                      {formatTimeAgo(post.createdAt)}
+                    </p>
+                  </Card>
+                ))}
+              </div>
+              {posts.length === 0 && (
+                <p className="text-center text-muted-foreground">
+                  {viewCity ? `No yips from ${formatCityName(viewCity)} yet.` : 'No yips nearby yet. Be the first!'}
+                </p>
+              )}
+            </section>
+          </>
+        )}
       </div>
     </div>
   )
