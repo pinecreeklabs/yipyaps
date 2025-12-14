@@ -1,12 +1,12 @@
-import { drizzle } from 'drizzle-orm/d1';
-import * as schema from './schema';
+import { drizzle } from 'drizzle-orm/d1'
+import * as schema from './schema'
 
 /**
  * Create a Drizzle database instance from a D1Database binding
- * 
+ *
  * @param db - The D1Database binding from Cloudflare Workers environment
  * @returns A Drizzle database instance with schema
- * 
+ *
  * Usage:
  * ```ts
  * export default {
@@ -19,8 +19,8 @@ import * as schema from './schema';
  * ```
  */
 export function getDb(db: D1Database) {
-  return drizzle(db, { schema });
+	return drizzle(db, { schema })
 }
 
 // Re-export schema for convenience
-export * from './schema';
+export * from './schema'
