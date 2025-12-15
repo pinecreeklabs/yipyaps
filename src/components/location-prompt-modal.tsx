@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { resolveCityFromCoords } from '../lib/geolocation'
 import { Button } from './ui/button'
 import {
 	Dialog,
@@ -9,19 +8,23 @@ import {
 	DialogTitle,
 } from './ui/dialog'
 
-type ModalState = 'initial' | 'locating' | 'found' | 'error'
+type ModalState = 'initial' | 'locating' | 'error'
 
-interface CityOnboardingModalProps {
+interface LocationPromptModalProps {
 	open: boolean
+	onLocationGranted: (lat: number, lng: number) => void
+	error?: string | null
 }
 
-export function CityOnboardingModal({ open }: CityOnboardingModalProps) {
+export function LocationPromptModal({
+	open,
+	onLocationGranted,
+	error: externalError,
+}: LocationPromptModalProps) {
 	const [state, setState] = useState<ModalState>('initial')
-	const [cityName, setCityName] = useState<string | null>(null)
-	const [citySlug, setCitySlug] = useState<string | null>(null)
 	const [error, setError] = useState<string | null>(null)
 
-	const handleFindCity = async () => {
+	const handleEnableLocation = async () => {
 		if (!navigator.geolocation) {
 			setError('Geolocation is not supported by your browser')
 			setState('error')
@@ -42,16 +45,9 @@ export function CityOnboardingModal({ open }: CityOnboardingModalProps) {
 				},
 			)
 
-			const { latitude, longitude } = position.coords
-			const result = await resolveCityFromCoords({
-				data: { latitude, longitude },
-			})
-
-			setCityName(result.cityName)
-			setCitySlug(result.citySlug)
-			setState('found')
+			onLocationGranted(position.coords.latitude, position.coords.longitude)
 		} catch (err) {
-			console.error('[CityOnboarding] Error:', err)
+			console.error('[LocationPrompt] Error:', err)
 			if (
 				err &&
 				typeof err === 'object' &&
@@ -67,56 +63,37 @@ export function CityOnboardingModal({ open }: CityOnboardingModalProps) {
 					setError('Location request timed out. Please try again.')
 				}
 			} else {
-				setError('Failed to determine your city. Please try again.')
+				setError('Failed to get location. Please try again.')
 			}
 			setState('error')
 		}
 	}
 
-	const handleGoToCity = () => {
-		if (!citySlug) return
-
-		const isLocalhost =
-			window.location.hostname === 'localhost' ||
-			window.location.hostname === '127.0.0.1'
-		const cookieDomain = isLocalhost ? '' : '; Domain=.yipyaps.com'
-		const secureFlag = isLocalhost ? '' : '; Secure'
-		document.cookie = `yipyaps_city_slug=${citySlug}; Path=/; Max-Age=86400${secureFlag}; SameSite=Lax${cookieDomain}`
-
-		if (isLocalhost) {
-			window.location.reload()
-		} else {
-			window.location.href = `https://${citySlug}.yipyaps.com`
-		}
-	}
+	const displayError = error || externalError
 
 	return (
 		<Dialog open={open}>
 			<DialogContent showCloseButton={false} className="text-center">
 				<DialogHeader className="items-center">
 					<DialogTitle className="font-[family-name:var(--font-display)] text-3xl">
-						{state === 'found'
-							? `You're in ${cityName}!`
-							: 'Welcome to Yipyaps'}
+						Welcome to Yipyaps
 					</DialogTitle>
 					<DialogDescription className="text-base">
 						{state === 'initial' &&
-							"Share quick notes with your city. Let's find where you are."}
-						{state === 'locating' && 'Finding your location...'}
-						{state === 'found' &&
-							'Ready to see what your neighbors are sharing?'}
-						{state === 'error' && error}
+							'Share quick notes with people nearby. Enable location to get started.'}
+						{state === 'locating' && 'Getting your location...'}
+						{state === 'error' && displayError}
 					</DialogDescription>
 				</DialogHeader>
 
 				<div className="mt-4 flex justify-center">
 					{state === 'initial' && (
 						<Button
-							onClick={handleFindCity}
+							onClick={handleEnableLocation}
 							size="lg"
 							className="bg-primary font-medium text-primary-foreground shadow-md hover:bg-primary/90"
 						>
-							Find my city
+							Enable Location
 						</Button>
 					)}
 
@@ -126,7 +103,10 @@ export function CityOnboardingModal({ open }: CityOnboardingModalProps) {
 								className="h-5 w-5 animate-spin"
 								viewBox="0 0 24 24"
 								fill="none"
+								role="img"
+								aria-labelledby="loading-title"
 							>
+								<title id="loading-title">Loading</title>
 								<circle
 									className="opacity-25"
 									cx="12"
@@ -145,19 +125,9 @@ export function CityOnboardingModal({ open }: CityOnboardingModalProps) {
 						</div>
 					)}
 
-					{state === 'found' && cityName && (
-						<Button
-							onClick={handleGoToCity}
-							size="lg"
-							className="bg-primary font-medium text-primary-foreground shadow-md hover:bg-primary/90"
-						>
-							Go to {cityName}
-						</Button>
-					)}
-
 					{state === 'error' && (
 						<Button
-							onClick={handleFindCity}
+							onClick={handleEnableLocation}
 							size="lg"
 							variant="outline"
 							className="font-medium"
@@ -166,6 +136,10 @@ export function CityOnboardingModal({ open }: CityOnboardingModalProps) {
 						</Button>
 					)}
 				</div>
+
+				<p className="mt-4 text-xs text-muted-foreground">
+					Your exact location is never shared. Posts only show approximate area.
+				</p>
 			</DialogContent>
 		</Dialog>
 	)

@@ -31,6 +31,9 @@
 			"remote": true
 		}
 	],
+	"ai": {
+		"binding": "AI"
+	},
 	/**
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
@@ -41,10 +44,6 @@
 	"routes": [
 		{
 			"pattern": "yipyaps.com/*",
-			"zone_name": "yipyaps.com"
-		},
-		{
-			"pattern": "*.yipyaps.com/*",
 			"zone_name": "yipyaps.com"
 		},
 		{

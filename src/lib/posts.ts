@@ -1,243 +1,141 @@
-import { createMiddleware, createServerFn } from '@tanstack/react-start'
-import { desc, eq } from 'drizzle-orm'
+import { createServerFn } from '@tanstack/react-start'
+import { and, desc, eq, gt, inArray } from 'drizzle-orm'
 import { getDb, posts } from '@/db'
-import { extractSubdomain, parseCookie } from './geolocation'
+import { coordsToCellId, getCellIdWithNeighbors } from './geo'
+import { resolveCity } from './geocoding'
+import { logPostEval, moderateContent } from './moderation'
+import type { CreatePostInput, GetPostsInput } from './types'
 
-const RADIUS_MILES = 20
-
-// Haversine formula to calculate distance between two points in miles
-function haversineDistance(
-	lat1: number,
-	lon1: number,
-	lat2: number,
-	lon2: number,
-): number {
-	const R = 3959 // Earth's radius in miles
-	const dLat = ((lat2 - lat1) * Math.PI) / 180
-	const dLon = ((lon2 - lon1) * Math.PI) / 180
-	const a =
-		Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-		Math.cos((lat1 * Math.PI) / 180) *
-			Math.cos((lat2 * Math.PI) / 180) *
-			Math.sin(dLon / 2) *
-			Math.sin(dLon / 2)
-	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-	return R * c
+async function getEnvAndDb() {
+	const { env } = await import(/* @vite-ignore */ 'cloudflare:workers')
+	return { env, db: getDb(env.DB) }
 }
 
-const cityMiddleware = createMiddleware().server(async ({ next, request }) => {
-	const cf = (request as Request & { cf?: unknown }).cf
-	const url = new URL(request.url)
-	const hostname = url.hostname
-
-	const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1' || !cf
-	const subdomain = isLocalDev ? null : extractSubdomain(hostname)
-
-	// Read GPS-derived city slug from cookie (no IP fallback)
-	const cookieHeader = request.headers.get('cookie')
-	const cookieCitySlug = parseCookie(cookieHeader, 'yipyaps_city_slug')
-
-	const userCitySlug = cookieCitySlug || null
-
-	// canPost is true if: local dev OR (on subdomain AND cookie matches subdomain)
-	const canPost =
-		isLocalDev ||
-		(!!subdomain && !!cookieCitySlug && cookieCitySlug === subdomain)
-
-	return next({
-		context: { subdomain, userCitySlug, canPost, isLocalDev },
-	})
-})
-
 export const getPosts = createServerFn({ method: 'GET' })
-	.middleware([cityMiddleware])
-	.inputValidator(
-		(data?: { userLat?: number; userLng?: number; viewCity?: string }) =>
-			data || {},
-	)
-	.handler(async ({ context, data }) => {
-		const { env } = await import(/* @vite-ignore */ 'cloudflare:workers')
-		const db = getDb(env.DB)
+	.inputValidator((data?: GetPostsInput) => data)
+	.handler(async ({ data }) => {
+		const { db } = await getEnvAndDb()
 
-		console.log('[getPosts] Request:', {
-			viewCity: data?.viewCity,
-			hasCoords: data?.userLat !== undefined,
-			subdomain: context.subdomain,
-			userCitySlug: context.userCitySlug,
-		})
+		// GPS required to view posts
+		if (!data?.userLat || !data?.userLng) {
+			return []
+		}
+
+		const { userLat, userLng } = data
+
+		// Get cell IDs to query (center + neighbors)
+		const cellIds = getCellIdWithNeighbors(userLat, userLng)
+
+		// 24 hours ago
+		const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
 
 		try {
-			// If viewing a specific city (from dropdown), show all posts from that city
-			if (data?.viewCity) {
-				const result = await db
-					.select()
-					.from(posts)
-					.where(eq(posts.city, data.viewCity))
-					.orderBy(desc(posts.createdAt))
-					.all()
-				console.log(
-					'[getPosts] Returned',
-					result.length,
-					'posts for city:',
-					data.viewCity,
-				)
-				return result
-			}
-
-			// Nearby = your city + 20mi radius
-			const allPosts = await db
+			const result = await db
 				.select()
 				.from(posts)
+				.where(
+					and(
+						inArray(posts.cellId, cellIds),
+						eq(posts.isVisible, true),
+						gt(posts.createdAt, twentyFourHoursAgo),
+					),
+				)
 				.orderBy(desc(posts.createdAt))
 				.all()
 
-			// Filter: posts from user's city OR within 20mi radius
-			const userCity = context.subdomain || context.userCitySlug
-			const hasCoords =
-				data?.userLat !== undefined && data?.userLng !== undefined
-
-			const filtered = allPosts.filter((post) => {
-				// Include all posts from user's city
-				if (userCity && post.city === userCity) return true
-
-				// Include posts within 20mi radius (if we have user coords and post has coords)
-				if (hasCoords && post.latitude && post.longitude) {
-					const postLat = parseFloat(post.latitude)
-					const postLng = parseFloat(post.longitude)
-					const distance = haversineDistance(
-						data!.userLat!,
-						data!.userLng!,
-						postLat,
-						postLng,
-					)
-					return distance <= RADIUS_MILES
-				}
-
-				return false
-			})
-
-			console.log(
-				'[getPosts] Returned',
-				filtered.length,
-				'of',
-				allPosts.length,
-				'posts for user city:',
-				userCity,
-			)
-			return filtered
+			// Strip exact coordinates before returning
+			return result.map((post) => ({
+				...post,
+				latitude: null,
+				longitude: null,
+			}))
 		} catch (error) {
-			console.error('[getPosts] Database error:', {
-				error: error instanceof Error ? error.message : String(error),
-				stack: error instanceof Error ? error.stack : undefined,
-				context: { viewCity: data?.viewCity, subdomain: context.subdomain },
-			})
+			console.error('[getPosts] Error:', error)
 			throw new Error('Failed to load posts. Please try again.')
 		}
 	})
 
 export const createPost = createServerFn({ method: 'POST' })
-	.middleware([cityMiddleware])
-	.inputValidator(
-		(data: {
-			content: string
-			city?: string
-			latitude?: number
-			longitude?: number
-		}) => data,
-	)
-	.handler(async ({ data, context }) => {
-		const { env } = await import(/* @vite-ignore */ 'cloudflare:workers')
-		const db = getDb(env.DB)
-
-		const { content, latitude, longitude } = data
-		const { subdomain, canPost, isLocalDev } = context
-
-		console.log('[createPost] Request received:', {
-			content: content?.substring(0, 50),
-			latitude,
-			longitude,
-			subdomain,
-			canPost,
-			isLocalDev,
-			dataCity: data.city,
-		})
-
-		if (!content?.trim()) {
-			console.error('[createPost] Validation failed: empty content')
+	.inputValidator((data: CreatePostInput) => {
+		if (!data.content?.trim()) {
 			throw new Error('Post content is required')
 		}
-
-		const city = isLocalDev ? data.city || 'dev' : subdomain
-
-		if (!city) {
-			console.error('[createPost] Validation failed: no city', {
-				subdomain,
-				isLocalDev,
-			})
-			throw new Error('Posts can only be created on city subdomains')
+		if (
+			typeof data.latitude !== 'number' ||
+			typeof data.longitude !== 'number'
+		) {
+			throw new Error('Location is required to post')
 		}
-
-		if (!isLocalDev && !canPost) {
-			console.error('[createPost] Permission denied:', {
-				subdomain,
-				userCitySlug: context.userCitySlug,
-			})
-			throw new Error(`You must be in ${subdomain} to post here`)
+		if (
+			data.latitude < -90 ||
+			data.latitude > 90 ||
+			data.longitude < -180 ||
+			data.longitude > 180
+		) {
+			throw new Error('Invalid coordinates')
 		}
+		return data
+	})
+	.handler(async ({ data }) => {
+		const { env, db } = await getEnvAndDb()
+		const { content, latitude, longitude } = data
 
-		const insertValues = {
-			content: content.trim(),
-			city,
-			latitude: latitude !== undefined ? String(latitude) : null,
-			longitude: longitude !== undefined ? String(longitude) : null,
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		}
+		const trimmedContent = content.trim()
 
-		console.log('[createPost] Inserting:', {
-			...insertValues,
-			content: insertValues.content.substring(0, 50),
-		})
+		// Compute S2 cell ID from coordinates
+		const cellId = coordsToCellId(latitude, longitude)
+
+		// Resolve city name (non-blocking, for future display)
+		const { city } = await resolveCity(
+			latitude,
+			longitude,
+			env.GOOGLE_MAPS_API_KEY,
+		)
+
+		// Content moderation
+		const moderation = await moderateContent(trimmedContent, env.AI)
 
 		try {
-			const result = await db.insert(posts).values(insertValues).returning()
+			const result = await db
+				.insert(posts)
+				.values({
+					content: trimmedContent,
+					cellId,
+					city,
+					latitude: String(latitude),
+					longitude: String(longitude),
+					isVisible: moderation.allowed,
+				})
+				.returning()
 
-			console.log('[createPost] Success:', { postId: result[0]?.id, city })
+			const postId = result[0]?.id
+			if (postId) {
+				await logPostEval({ db, postId, result: moderation })
+			}
+
+			console.log('[createPost]', moderation.allowed ? 'Published' : 'Hidden', {
+				postId,
+				cellId,
+				city,
+			})
+
+			if (!moderation.allowed) {
+				throw new Error(
+					moderation.reason ||
+						'Your post contains content that violates our community guidelines.',
+				)
+			}
+
 			return result
 		} catch (error) {
-			console.error('[createPost] Database error:', {
-				error: error instanceof Error ? error.message : String(error),
-				stack: error instanceof Error ? error.stack : undefined,
-				insertValues: {
-					...insertValues,
-					content: insertValues.content.substring(0, 50),
-				},
-			})
+			// Re-throw moderation errors
+			if (
+				error instanceof Error &&
+				error.message.includes('community guidelines')
+			) {
+				throw error
+			}
+			console.error('[createPost] DB Error:', error)
 			throw new Error('Failed to create post. Please try again.')
 		}
 	})
-
-export const getCities = createServerFn({ method: 'GET' }).handler(async () => {
-	const { env } = await import(/* @vite-ignore */ 'cloudflare:workers')
-	const db = getDb(env.DB)
-
-	console.log('[getCities] Fetching all cities')
-
-	try {
-		const result = await db
-			.select({ city: posts.city })
-			.from(posts)
-			.groupBy(posts.city)
-			.all()
-
-		const cities = result.map((r) => r.city)
-		console.log('[getCities] Found', cities.length, 'cities:', cities)
-		return cities
-	} catch (error) {
-		console.error('[getCities] Database error:', {
-			error: error instanceof Error ? error.message : String(error),
-			stack: error instanceof Error ? error.stack : undefined,
-		})
-		throw new Error('Failed to load cities. Please try again.')
-	}
-})
