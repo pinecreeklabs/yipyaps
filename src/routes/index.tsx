@@ -157,7 +157,7 @@ function Home() {
 					<p className="mt-3 text-balance text-lg text-muted-foreground md:text-xl">
 						{needsLocation
 							? 'Share quick notes with people nearby'
-							: 'Notes from people near you'}
+							: 'Yapping from your area'}
 					</p>
 				</header>
 
