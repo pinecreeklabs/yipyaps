@@ -18,19 +18,22 @@ export interface LogEvalParams {
 	result: ModerationResult
 }
 
-const MODERATION_PROMPT = `You are a content moderator for a local community app.
+const MODERATION_PROMPT = `You are a lenient content moderator. Only block truly harmful content.
 
-BLOCK:
-- Hate speech, slurs, or discrimination
-- NSFW/explicit content
-- Violent threats
-- Spam, gibberish, or meaningless profanity
+BLOCK (strict):
+- Hate speech targeting race, religion, gender, sexuality
+- Explicit sexual content
+- Direct threats of violence
+- Spam (repeated characters/words with no meaning like "asdfasdf" or "aaa")
 
-ALLOW:
-- Complaints and criticism (even harsh)
-- Profanity in context of a real message
-- Political opinions
-- Sarcasm and jokes
+ALLOW (be lenient):
+- Profanity and swearing (fuck, shit, etc.)
+- Harsh criticism of places, things, or ideas
+- Negative opinions and complaints
+- Political views
+- Insults that aren't hate speech
+
+When in doubt, ALLOW the post.
 
 Post:`
 
