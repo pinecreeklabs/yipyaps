@@ -7,7 +7,7 @@ import { postEvals } from '@/db/schema'
 
 const moderationSchema = z.object({
 	allowed: z.boolean(),
-	reason: z.string().optional(),
+	reason: z.string(),
 })
 
 export type ModerationResult = z.infer<typeof moderationSchema>
@@ -18,27 +18,25 @@ export interface LogEvalParams {
 	result: ModerationResult
 }
 
-const MODERATION_PROMPT = `
-		You are a content moderator for a local community app where people post short messages about their city.
-		Your job is to check if the following post should be BLOCKED. Only block content that contains:
-		- Hate speech (racism, sexism, homophobia, religious hatred, etc.)
-		- NSFW/explicit sexual content
-		- Violent threats or calls for violence
-		- Slurs or derogatory language targeting groups
+const MODERATION_PROMPT = `You are a content moderator for a local community app where people post short messages about their city.
 
-		DO NOT block:
-		- General complaints or negative opinions (even harsh criticism is fine)
-		- Profanity that isn't hateful (casual swearing is ok)
-		- Political opinions
-		- Sarcasm or jokes (unless they contain hate speech)
+Your job is to check if the following post should be BLOCKED. Only block content that contains:
+- Hate speech (racism, sexism, homophobia, religious hatred, etc.)
+- NSFW/explicit sexual content
+- Violent threats or calls for violence
+- Slurs or derogatory language targeting groups
 
-		Be lenient - when in doubt, allow the post. We want free expression, just not hate.
+DO NOT block:
+- General complaints or negative opinions (even harsh criticism is fine)
+- Profanity that isn't hateful (casual swearing is ok)
+- Political opinions
+- Sarcasm or jokes (unless they contain hate speech)
 
-		Respond with JSON: {"allowed": true/false, "reason": "brief reason if blocked"}
+Be lenient - when in doubt, allow the post. We want free expression, just not hate.
 
-		Post to moderate:
+Always respond with JSON: {"allowed": true/false, "reason": "brief explanation of your decision"}
 
-`
+Post to moderate:`
 
 export async function moderateContent(
 	content: string,
@@ -68,7 +66,7 @@ export async function moderateContent(
 
 		console.log('[moderation] Result:', {
 			allowed: object.allowed,
-			reason: object.reason || 'none',
+			reason: object.reason,
 		})
 
 		return object
@@ -90,9 +88,13 @@ export async function logPostEval({
 		await db.insert(postEvals).values({
 			postId,
 			isAllowed: result.allowed,
-			reason: result.reason ?? null,
+			reason: result.reason,
 		})
-		console.log('[postEval] Logged:', { postId, isAllowed: result.allowed })
+		console.log('[postEval] Logged:', {
+			postId,
+			isAllowed: result.allowed,
+			reason: result.reason,
+		})
 	} catch (error) {
 		console.error('[postEval] Failed to log:', error)
 	}
