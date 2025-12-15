@@ -57,6 +57,7 @@ function Home() {
 	const [posts, setPosts] = useState<Post[]>([])
 	const [noteText, setNoteText] = useState('')
 	const [isSubmitting, setIsSubmitting] = useState(false)
+	const [postError, setPostError] = useState<string | null>(null)
 	const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
 	const [locationError, setLocationError] = useState<string | null>(null)
 	const [showLocationPrompt, setShowLocationPrompt] = useState(false)
@@ -116,22 +117,31 @@ function Home() {
 		if (!noteText.trim() || isSubmitting || charCount > 140 || !userLocation)
 			return
 		setIsSubmitting(true)
+		setPostError(null)
+
 		try {
-			await createPost({
+			const result = await createPost({
 				data: {
 					content: noteText.trim(),
 					latitude: userLocation.latitude,
 					longitude: userLocation.longitude,
 				},
 			})
-			setNoteText('')
-			const freshPosts = await getPosts({
-				data: {
-					userLat: userLocation.latitude,
-					userLng: userLocation.longitude,
-				},
-			})
-			setPosts(freshPosts)
+
+			if (result.success) {
+				setNoteText('')
+				const freshPosts = await getPosts({
+					data: {
+						userLat: userLocation.latitude,
+						userLng: userLocation.longitude,
+					},
+				})
+				setPosts(freshPosts)
+			} else if (result.blocked) {
+				setPostError(result.message || 'Your post was not published.')
+			}
+		} catch {
+			setPostError('Something went wrong. Please try again.')
 		} finally {
 			setIsSubmitting(false)
 		}
@@ -175,9 +185,17 @@ function Home() {
 								<Textarea
 									placeholder="Share a quick note..."
 									value={noteText}
-									onChange={(e) => setNoteText(e.target.value)}
+									onChange={(e) => {
+										setNoteText(e.target.value)
+										if (postError) setPostError(null)
+									}}
 									className="mb-4 min-h-[100px] resize-none border-0 bg-transparent text-base text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
 								/>
+								{postError && (
+									<p className="mb-4 text-sm font-medium text-destructive">
+										{postError}
+									</p>
+								)}
 								<div className="flex items-center justify-between">
 									<span className="text-xs font-medium text-muted-foreground">
 										{charCount} / 140

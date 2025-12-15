@@ -18,25 +18,21 @@ export interface LogEvalParams {
 	result: ModerationResult
 }
 
-const MODERATION_PROMPT = `You are a content moderator for a local community app where people post short messages about their city.
+const MODERATION_PROMPT = `You are a content moderator for a local community app.
 
-Your job is to check if the following post should be BLOCKED. Only block content that contains:
-- Hate speech (racism, sexism, homophobia, religious hatred, etc.)
-- NSFW/explicit sexual content
-- Violent threats or calls for violence
-- Slurs or derogatory language targeting groups
+BLOCK:
+- Hate speech, slurs, or discrimination
+- NSFW/explicit content
+- Violent threats
+- Spam, gibberish, or meaningless profanity
 
-DO NOT block:
-- General complaints or negative opinions (even harsh criticism is fine)
-- Profanity that isn't hateful (casual swearing is ok)
+ALLOW:
+- Complaints and criticism (even harsh)
+- Profanity in context of a real message
 - Political opinions
-- Sarcasm or jokes (unless they contain hate speech)
+- Sarcasm and jokes
 
-Be lenient - when in doubt, allow the post. We want free expression, just not hate.
-
-Always respond with JSON: {"allowed": true/false, "reason": "brief explanation of your decision"}
-
-Post to moderate:`
+Post:`
 
 export async function moderateContent(
 	content: string,
@@ -55,7 +51,7 @@ export async function moderateContent(
 
 	try {
 		const workersai = createWorkersAI({ binding: aiBinding })
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+		// biome-ignore lint/suspicious/noExplicitAny: workers-ai-provider doesn't export correct types
 		const model = workersai('@cf/meta/llama-3.1-8b-instruct-fast' as any)
 
 		const { object } = await generateObject({
@@ -75,7 +71,7 @@ export async function moderateContent(
 			'[moderation] Error:',
 			error instanceof Error ? error.message : error,
 		)
-		return { allowed: true, reason: 'Moderation error, allowed by default' }
+		return { allowed: false, reason: 'Moderation service unavailable' }
 	}
 }
 

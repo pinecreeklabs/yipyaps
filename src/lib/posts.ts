@@ -4,7 +4,7 @@ import { getDb, posts } from '@/db'
 import { coordsToCellId, getCellIdWithNeighbors } from './geo'
 import { resolveCity } from './geocoding'
 import { logPostEval, moderateContent } from './moderation'
-import type { CreatePostInput, GetPostsInput } from './types'
+import type { CreatePostInput, CreatePostResult, GetPostsInput } from './types'
 
 async function getEnvAndDb() {
 	const { env } = await import(/* @vite-ignore */ 'cloudflare:workers')
@@ -76,16 +76,20 @@ export const createPost = createServerFn({ method: 'POST' })
 		}
 		return data
 	})
-	.handler(async ({ data }) => {
+	.handler(async ({ data }): Promise<CreatePostResult> => {
 		const { env, db } = await getEnvAndDb()
 		const { content, latitude, longitude } = data
 
 		const trimmedContent = content.trim()
+		const contentPreview =
+			trimmedContent.length > 50
+				? `${trimmedContent.substring(0, 50)}...`
+				: trimmedContent
 
 		// Compute S2 cell ID from coordinates
 		const cellId = coordsToCellId(latitude, longitude)
 
-		// Resolve city name (non-blocking, for future display)
+		// Resolve city name for display
 		const { city } = await resolveCity(
 			latitude,
 			longitude,
@@ -109,33 +113,43 @@ export const createPost = createServerFn({ method: 'POST' })
 				.returning()
 
 			const postId = result[0]?.id
+
+			// Log moderation result
 			if (postId) {
 				await logPostEval({ db, postId, result: moderation })
 			}
 
-			console.log('[createPost]', moderation.allowed ? 'Published' : 'Hidden', {
+			// Server-side logging
+			if (moderation.allowed) {
+				console.log('[createPost] Published', {
+					postId,
+					cellId,
+					city,
+					content: contentPreview,
+				})
+				return { success: true }
+			}
+
+			console.log('[createPost] Blocked', {
 				postId,
 				cellId,
 				city,
+				content: contentPreview,
+				reason: moderation.reason,
 			})
 
-			if (!moderation.allowed) {
-				throw new Error(
-					moderation.reason ||
-						'Your post contains content that violates our community guidelines.',
-				)
+			return {
+				success: false,
+				blocked: true,
+				message:
+					'Your post was not published. Please keep it friendly and try again.',
 			}
-
-			return result
 		} catch (error) {
-			// Re-throw moderation errors
-			if (
-				error instanceof Error &&
-				error.message.includes('community guidelines')
-			) {
-				throw error
-			}
-			console.error('[createPost] DB Error:', error)
+			console.error('[createPost] DB Error:', {
+				error: error instanceof Error ? error.message : error,
+				cellId,
+				city,
+			})
 			throw new Error('Failed to create post. Please try again.')
 		}
 	})

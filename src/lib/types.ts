@@ -8,3 +8,9 @@ export interface CreatePostInput {
 	latitude: number
 	longitude: number
 }
+
+export interface CreatePostResult {
+	success: boolean
+	blocked?: boolean
+	message?: string
+}
