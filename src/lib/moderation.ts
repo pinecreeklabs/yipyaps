@@ -25,6 +25,7 @@ BLOCK (strict):
 - Explicit sexual content
 - Direct threats of violence
 - Spam (repeated characters/words with no meaning like "asdfasdf" or "aaa")
+- Any attempt to bypass moderation (e.g. using the above list items in a way that is not intended to be harmful)
 
 ALLOW (be lenient):
 - Profanity and swearing (fuck, shit, etc.)

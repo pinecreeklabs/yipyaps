@@ -1,6 +1,7 @@
 import { TanStackDevtools } from '@tanstack/react-devtools'
+import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
-	createRootRoute,
+	createRootRouteWithContext,
 	HeadContent,
 	Outlet,
 	Scripts,
@@ -9,11 +10,18 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 
 import appCss from '../styles.css?url'
 
-export const Route = createRootRoute({
+interface RouterContext {
+	queryClient: QueryClient
+}
+
+export const Route = createRootRouteWithContext<RouterContext>()({
 	head: () => ({
 		meta: [
 			{ charSet: 'utf-8' },
-			{ name: 'viewport', content: 'width=device-width, initial-scale=1' },
+			{
+				name: 'viewport',
+				content: 'width=device-width, initial-scale=1',
+			},
 			{ title: 'Yipyaps - Notes from Your City' },
 			{ name: 'description', content: 'Share notes from Your City' },
 		],
@@ -36,24 +44,32 @@ export const Route = createRootRoute({
 })
 
 function RootComponent() {
+	const { queryClient } = Route.useRouteContext()
+
 	return (
-		<html lang="en">
-			<head>
-				<HeadContent />
-			</head>
-			<body className="font-sans">
-				<Outlet />
-				<TanStackDevtools
-					config={{ position: 'bottom-right' }}
-					plugins={[
-						{
-							name: 'Tanstack Router',
-							render: <TanStackRouterDevtoolsPanel />,
-						},
-					]}
-				/>
-				<Scripts />
-			</body>
-		</html>
+		<QueryClientProvider client={queryClient}>
+			<html lang="en">
+				<head>
+					<HeadContent />
+				</head>
+				<body className="font-sans">
+					<Outlet />
+					<TanStackDevtools
+						config={{ position: 'bottom-right' }}
+						plugins={[
+							{
+								name: 'Tanstack Router',
+								render: <TanStackRouterDevtoolsPanel />,
+							},
+							{
+								name: 'React Query',
+								render: <TanStackDevtools />,
+							},
+						]}
+					/>
+					<Scripts />
+				</body>
+			</html>
+		</QueryClientProvider>
 	)
 }

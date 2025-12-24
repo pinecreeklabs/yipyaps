@@ -1,3 +1,8 @@
+export interface UserLocation {
+	latitude: number
+	longitude: number
+}
+
 export interface GetPostsInput {
 	userLat: number
 	userLng: number

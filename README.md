@@ -97,13 +97,13 @@ A modern web app built with React, TanStack Router, and Cloudflare Pages.
 
 ### Example Scenarios
 
-| User Location | URL Visited | GPS Cookie | Result |
-|--------------|-------------|------------|--------|
-| Nashville | yipyaps.com | None | → CityOnboardingModal → GPS → Redirect to nashville.yipyaps.com |
-| Nashville | yipyaps.com | nashville | → Auto-redirect to nashville.yipyaps.com |
-| Nashville | nashville.yipyaps.com | nashville | Can post and read (cookie matches) |
-| Nashville | knoxville.yipyaps.com | nashville | Can only read (cookie doesn't match) |
-| localhost | localhost:3000 | N/A | Dev mode: can post anywhere |
+| User Location | URL Visited           | GPS Cookie | Result                                                          |
+| ------------- | --------------------- | ---------- | --------------------------------------------------------------- |
+| Nashville     | yipyaps.com           | None       | → CityOnboardingModal → GPS → Redirect to nashville.yipyaps.com |
+| Nashville     | yipyaps.com           | nashville  | → Auto-redirect to nashville.yipyaps.com                        |
+| Nashville     | nashville.yipyaps.com | nashville  | Can post and read (cookie matches)                              |
+| Nashville     | knoxville.yipyaps.com | nashville  | Can only read (cookie doesn't match)                            |
+| localhost     | localhost:3000        | N/A        | Dev mode: can post anywhere                                     |
 
 ## Development
 

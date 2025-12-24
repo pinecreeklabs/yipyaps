@@ -75,7 +75,7 @@ export function LocationPromptModal({
 		<Dialog open={open}>
 			<DialogContent showCloseButton={false} className="text-center">
 				<DialogHeader className="items-center">
-					<DialogTitle className="font-[family-name:var(--font-display)] text-3xl">
+					<DialogTitle className="font-display text-3xl">
 						Welcome to Yipyaps
 					</DialogTitle>
 					<DialogDescription className="text-base">
