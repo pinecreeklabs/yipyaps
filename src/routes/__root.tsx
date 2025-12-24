@@ -1,71 +1,75 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-
 import { TanStackDevtools } from '@tanstack/react-devtools'
-import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from '@tanstack/react-router'
+import { type QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+	createRootRouteWithContext,
+	HeadContent,
+	Outlet,
+	Scripts,
+} from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 
 import appCss from '../styles.css?url'
 
 interface RouterContext {
-    queryClient: QueryClient
+	queryClient: QueryClient
 }
 
 export const Route = createRootRouteWithContext<RouterContext>()({
-    head: () => ({
-        meta: [
-            { charSet: 'utf-8' },
-            {
-                name: 'viewport',
-                content: 'width=device-width, initial-scale=1',
-            },
-            { title: 'Yipyaps - Notes from Your City' },
-            { name: 'description', content: 'Share notes from Your City' },
-        ],
-        links: [
-            { rel: 'icon', href: '/favicon.ico' },
-            { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-            {
-                rel: 'preconnect',
-                href: 'https://fonts.gstatic.com',
-                crossOrigin: 'anonymous',
-            },
-            {
-                rel: 'stylesheet',
-                href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Quicksand:wght@500;600;700&display=swap',
-            },
-            { rel: 'stylesheet', href: appCss },
-        ],
-    }),
-    component: RootComponent,
+	head: () => ({
+		meta: [
+			{ charSet: 'utf-8' },
+			{
+				name: 'viewport',
+				content: 'width=device-width, initial-scale=1',
+			},
+			{ title: 'Yipyaps - Notes from Your City' },
+			{ name: 'description', content: 'Share notes from Your City' },
+		],
+		links: [
+			{ rel: 'icon', href: '/favicon.ico' },
+			{ rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+			{
+				rel: 'preconnect',
+				href: 'https://fonts.gstatic.com',
+				crossOrigin: 'anonymous',
+			},
+			{
+				rel: 'stylesheet',
+				href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Quicksand:wght@500;600;700&display=swap',
+			},
+			{ rel: 'stylesheet', href: appCss },
+		],
+	}),
+	component: RootComponent,
 })
 
 function RootComponent() {
-    const { queryClient } = Route.useRouteContext()
+	const { queryClient } = Route.useRouteContext()
 
-    return (
-        <QueryClientProvider client={queryClient}>
-            <html lang="en">
-                <head>
-                    <HeadContent />
-                </head>
-                <body className="font-sans">
-                    <Outlet />
-                    <TanStackDevtools
-                        config={{ position: 'bottom-right' }}
-                        plugins={[
-                            {
-                                name: 'Tanstack Router',
-                                render: <TanStackRouterDevtoolsPanel />,
-                            },
-                            {
-                                name: 'React Query',
-                                render: <TanStackDevtools />,
-                            },
-                        ]}
-                    />
-                    <Scripts />
-                </body>
-            </html>
-        </QueryClientProvider>
-    )
+	return (
+		<QueryClientProvider client={queryClient}>
+			<html lang="en">
+				<head>
+					<HeadContent />
+				</head>
+				<body className="font-sans">
+					<Outlet />
+					<TanStackDevtools
+						config={{ position: 'bottom-right' }}
+						plugins={[
+							{
+								name: 'Tanstack Router',
+								render: <TanStackRouterDevtoolsPanel />,
+							},
+							{
+								name: 'React Query',
+								render: <TanStackDevtools />,
+							},
+						]}
+					/>
+					<Scripts />
+				</body>
+			</html>
+		</QueryClientProvider>
+	)
 }

@@ -19,7 +19,7 @@ import * as schema from './schema'
  * ```
  */
 export function getDb(db: D1Database) {
-    return drizzle(db, { schema })
+	return drizzle(db, { schema })
 }
 
 // Re-export schema for convenience

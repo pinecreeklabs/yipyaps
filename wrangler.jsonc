@@ -3,83 +3,83 @@
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  */
 {
-    "$schema": "node_modules/wrangler/config-schema.json",
-    "name": "yipyaps",
-    "compatibility_date": "2025-09-02",
-    "compatibility_flags": ["nodejs_compat"],
-    "main": "@tanstack/react-start/server-entry",
-    "observability": {
-        "logs": {
-            "enabled": true,
-            "destinations": ["signoz-logs"],
-            "head_sampling_rate": 1,
-            "persist": true,
-            "invocation_logs": true,
-        },
-        "traces": {
-            "enabled": true,
-            "destinations": ["signoz-traces"],
-            "head_sampling_rate": 1,
-            "persist": true,
-        },
-    },
-    "d1_databases": [
-        {
-            "binding": "DB",
-            "database_name": "yipyaps-db",
-            "database_id": "66dde7e9-fd63-44d4-a5bf-7a5044b826d8",
-            "remote": true,
-        },
-    ],
-    "ai": {
-        "binding": "AI",
-    },
-    /**
-     * Environment Variables
-     * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-     */
-    "vars": {
-        "APP_ENV": "development",
-    },
-    "routes": [
-        {
-            "pattern": "yipyaps.com/*",
-            "zone_name": "yipyaps.com",
-        },
-        {
-            "pattern": "yipyaps.com",
-            "zone_name": "yipyaps.com",
-            "custom_domain": true,
-        },
-    ],
-    "workers_dev": true,
-    "preview_urls": true,
-    "placement": {
-        "mode": "smart",
-    },
-    /**
-     * Bindings
-     * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-     * databases, object storage, AI inference, real-time communication and more.
-     * https://developers.cloudflare.com/workers/runtime-apis/bindings/
-     */
-    /**
-     * Environment Variables
-     * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-     */
-    // "vars": { "MY_VARIABLE": "production_value" }
-    /**
-     * Note: Use secrets to store sensitive data.
-     * https://developers.cloudflare.com/workers/configuration/secrets/
-     */
-    /**
-     * Static Assets
-     * https://developers.cloudflare.com/workers/static-assets/binding/
-     */
-    // "assets": { "directory": "./public/", "binding": "ASSETS" }
-    /**
-     * Service Bindings (communicate between multiple Workers)
-     * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-     */
-    // "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "yipyaps",
+	"compatibility_date": "2025-09-02",
+	"compatibility_flags": ["nodejs_compat"],
+	"main": "@tanstack/react-start/server-entry",
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"destinations": ["signoz-logs"],
+			"head_sampling_rate": 1,
+			"persist": true,
+			"invocation_logs": true
+		},
+		"traces": {
+			"enabled": true,
+			"destinations": ["signoz-traces"],
+			"head_sampling_rate": 1,
+			"persist": true
+		}
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "yipyaps-db",
+			"database_id": "66dde7e9-fd63-44d4-a5bf-7a5044b826d8",
+			"remote": true
+		}
+	],
+	"ai": {
+		"binding": "AI"
+	},
+	/**
+	 * Environment Variables
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+	 */
+	"vars": {
+		"APP_ENV": "development"
+	},
+	"routes": [
+		{
+			"pattern": "yipyaps.com/*",
+			"zone_name": "yipyaps.com"
+		},
+		{
+			"pattern": "yipyaps.com",
+			"zone_name": "yipyaps.com",
+			"custom_domain": true
+		}
+	],
+	"workers_dev": true,
+	"preview_urls": true,
+	"placement": {
+		"mode": "smart"
+	}
+	/**
+	 * Bindings
+	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
+	 * databases, object storage, AI inference, real-time communication and more.
+	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
+	 */
+	/**
+	 * Environment Variables
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+	 */
+	// "vars": { "MY_VARIABLE": "production_value" }
+	/**
+	 * Note: Use secrets to store sensitive data.
+	 * https://developers.cloudflare.com/workers/configuration/secrets/
+	 */
+	/**
+	 * Static Assets
+	 * https://developers.cloudflare.com/workers/static-assets/binding/
+	 */
+	// "assets": { "directory": "./public/", "binding": "ASSETS" }
+	/**
+	 * Service Bindings (communicate between multiple Workers)
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
+	 */
+	// "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
 }
